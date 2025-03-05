@@ -22,14 +22,17 @@ contract HelperConfig is Script {
     mapping(uint256 chainId => NetworkConfig) public networkConfigs;
 
     constructor() {
+        if (block.chainid == LOCAL_CHAIN_ID) {
+            localNetworkConfig = getOrCreateAnvilEthConfig();
+        }
         networkConfigs[ETH_SEPOLIA_CHAIN_ID] = getEthSepoliaConfig();
     }
 
-    function getConfig() public view returns (NetworkConfig memory) {
+    function getConfig() public returns (NetworkConfig memory) {
         return getConfigByChainId(block.chainid);
     }
 
-    function getConfigByChainId(uint256 chainId) public view returns (NetworkConfig memory) {
+    function getConfigByChainId(uint256 chainId) public returns (NetworkConfig memory) {
         if (chainId == LOCAL_CHAIN_ID) {
             return getOrCreateAnvilEthConfig();
         } else if (networkConfigs[chainId].account != address(0)) {
@@ -46,9 +49,13 @@ contract HelperConfig is Script {
         return NetworkConfig({entryPoint: address(0), account: BURNER_WALLET});
     }
 
-    function getOrCreateAnvilEthConfig() public view returns (NetworkConfig memory) {
+    function getOrCreateAnvilEthConfig() public returns (NetworkConfig memory) {
         if (localNetworkConfig.account != address(0)) {
             return localNetworkConfig;
         }
+        EntryPoint entryPoint = new EntryPoint();
+        localNetworkConfig = NetworkConfig({entryPoint: address(entryPoint), account: BURNER_WALLET});
+
+        return localNetworkConfig;
     }
 }

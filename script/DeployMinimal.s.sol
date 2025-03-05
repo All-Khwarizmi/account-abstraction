@@ -8,14 +8,13 @@ import {HelperConfig} from "./HelperConfig.s.sol";
 
 contract DeployMinimal is Script {
     function run() public {
-        vm.startBroadcast();
-        vm.stopBroadcast();
+
     }
 
     function deployMinimalAccount() public returns (MinimalAccount, HelperConfig) {
         HelperConfig helperConfig = new HelperConfig();
         HelperConfig.NetworkConfig memory networkConfig = helperConfig.getConfig();
-        vm.startBroadcast();
+        vm.startBroadcast(networkConfig.account);
         MinimalAccount minimalAccount = new MinimalAccount(networkConfig.entryPoint);
         minimalAccount.transferOwnership(msg.sender);
         vm.stopBroadcast();

@@ -78,7 +78,7 @@ contract MinimalAccount is IAccount, Ownable {
         _payPreFund(missingAccountFunds);
     }
 
-    function execute(address dest, uint256 value, bytes calldata functionData) external {
+    function execute(address dest, uint256 value, bytes calldata functionData) external onlyOwnerOrEntryPoint {
         (bool success,) = payable(dest).call{value: value}(functionData);
         require(success, "Failed to execute");
     }
