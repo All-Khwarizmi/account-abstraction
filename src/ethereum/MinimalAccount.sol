@@ -9,4 +9,8 @@ contract MinimalAccount is IAccount {
         external
         returns (uint256 validationData)
     {}
+
+    function _validateSignature(bytes32 userOpHash, bytes memory userOpSignature) internal view returns (uint256) {
+        return 1;
+    }
 }
