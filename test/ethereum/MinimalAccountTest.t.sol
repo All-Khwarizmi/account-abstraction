@@ -33,6 +33,10 @@ contract MinimalAccountTest is Test {
         usdc = new ERC20Mock();
     }
 
+    /*//////////////////////////////////////////////////////////////
+                              EXECUTE FLOW
+    //////////////////////////////////////////////////////////////*/
+
     function testOwnerCanExecute() public {
         address dest = address(usdc);
         uint256 value = 0;
@@ -53,6 +57,9 @@ contract MinimalAccountTest is Test {
         minimalAccount.execute(dest, value, functionData);
         vm.stopPrank();
     }
+    /*//////////////////////////////////////////////////////////////
+                           VALIDATE SIGNATURE
+    //////////////////////////////////////////////////////////////*/
 
     function testShouldBeAbleToValidateSignature() public {
         PackedUserOperation memory userOp = _getPackedUserOp(minimalAccount.owner(), PRIVATE_KEY);
@@ -63,15 +70,18 @@ contract MinimalAccountTest is Test {
 
         assertEq(validationData, SIG_VALIDATION_SUCCESS);
     }
+    /*//////////////////////////////////////////////////////////////
+                            VALIDATE USER OP
+    //////////////////////////////////////////////////////////////*/
 
     function testValidateUserOpReturnAffirmativeValidationData() public {
         // Create the packed user op
         PackedUserOperation memory userOp = _getPackedUserOp(minimalAccount.owner(), PRIVATE_KEY);
         // Get the user op hash (using method _getUserOpHash)
         bytes32 userOpHash = this._getUserOpHash(userOp, config.entryPoint);
-        
+
         vm.deal(address(minimalAccount), MISSING_ACCOUNT_FUNDS);
-       
+
         // Validate the user op
         vm.prank(config.entryPoint);
         uint256 validationData = minimalAccount.validateUserOp(userOp, userOpHash, MISSING_ACCOUNT_FUNDS);
@@ -112,6 +122,10 @@ contract MinimalAccountTest is Test {
 
         assertEq(entryPointBalanceAfter, entryPointBalanceBefore + MISSING_ACCOUNT_FUNDS);
     }
+
+    /*//////////////////////////////////////////////////////////////
+                                HELPERS
+    //////////////////////////////////////////////////////////////*/
 
     function _getPackedUserOp(address sender, uint256 privateKey) private view returns (PackedUserOperation memory) {
         uint256 nonce = 0;
