@@ -16,15 +16,18 @@ contract MinimalAccountTest is Test {
 
     DeployMinimal deployMinimal;
     HelperConfig helperConfig;
+    HelperConfig.NetworkConfig config;
     MinimalAccount minimalAccount;
     ERC20Mock usdc;
     uint256 AMOUNT = 100;
     address OWNER = 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266;
     uint256 private PRIVATE_KEY = 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80;
+    uint256 private constant MISSING_ACCOUNT_FUNDS = 100;
 
     function setUp() public {
         deployMinimal = new DeployMinimal();
         (minimalAccount, helperConfig) = deployMinimal.deployMinimalAccount(OWNER);
+        config = helperConfig.getConfig();
         assertEq(minimalAccount.owner(), OWNER);
         // assertEq(helperConfig.getConfig().entryPoint, address(this));
         usdc = new ERC20Mock();
@@ -65,12 +68,13 @@ contract MinimalAccountTest is Test {
         // Create the packed user op
         PackedUserOperation memory userOp = _getPackedUserOp(minimalAccount.owner(), PRIVATE_KEY);
         // Get the user op hash (using method _getUserOpHash)
-        bytes32 userOpHash = this._getUserOpHash(userOp, helperConfig.getConfig().entryPoint);
-        //
-        uint256 missingAccountFunds = 0;
+        bytes32 userOpHash = this._getUserOpHash(userOp, config.entryPoint);
+        
+        vm.deal(address(minimalAccount), MISSING_ACCOUNT_FUNDS);
+       
         // Validate the user op
-        vm.prank(helperConfig.getConfig().entryPoint);
-        uint256 validationData = minimalAccount.validateUserOp(userOp, userOpHash, missingAccountFunds);
+        vm.prank(config.entryPoint);
+        uint256 validationData = minimalAccount.validateUserOp(userOp, userOpHash, MISSING_ACCOUNT_FUNDS);
 
         assertEq(validationData, SIG_VALIDATION_SUCCESS); // SIG_VALIDATION_SUCCESS = 0
     }
@@ -80,19 +84,36 @@ contract MinimalAccountTest is Test {
         (address sender, uint256 privateKey) = makeAddrAndKey("user");
         PackedUserOperation memory userOp = _getPackedUserOp(sender, privateKey);
         // Get the user op hash (using method _getUserOpHash)
-        bytes32 userOpHash = this._getUserOpHash(userOp, helperConfig.getConfig().entryPoint);
-        //
-        uint256 missingAccountFunds = 0;
+        bytes32 userOpHash = this._getUserOpHash(userOp, config.entryPoint);
+
+        vm.deal(address(minimalAccount), MISSING_ACCOUNT_FUNDS);
+
         // Validate the user op
-        vm.prank(helperConfig.getConfig().entryPoint);
-        uint256 validationData = minimalAccount.validateUserOp(userOp, userOpHash, missingAccountFunds);
+        vm.prank(config.entryPoint);
+        uint256 validationData = minimalAccount.validateUserOp(userOp, userOpHash, MISSING_ACCOUNT_FUNDS);
 
         assertEq(validationData, SIG_VALIDATION_FAILED); // SIG_VALIDATION_FAILED = 1
     }
 
-    // function testValidateUserOpPaysEntryPoint() public {}
+    function testValidateUserOpSendsMissingAccountFunds() public {
+        PackedUserOperation memory userOp = _getPackedUserOp(minimalAccount.owner(), PRIVATE_KEY);
 
-    function _getPackedUserOp(address sender, uint256 privateKey) private returns (PackedUserOperation memory) {
+        bytes32 userOpHash = this._getUserOpHash(userOp, config.entryPoint);
+
+        uint256 entryPointBalanceBefore = address(config.entryPoint).balance;
+        assertEq(entryPointBalanceBefore, 0);
+
+        vm.deal(address(minimalAccount), MISSING_ACCOUNT_FUNDS);
+
+        vm.prank(config.entryPoint);
+        minimalAccount.validateUserOp(userOp, userOpHash, MISSING_ACCOUNT_FUNDS);
+
+        uint256 entryPointBalanceAfter = address(config.entryPoint).balance;
+
+        assertEq(entryPointBalanceAfter, entryPointBalanceBefore + MISSING_ACCOUNT_FUNDS);
+    }
+
+    function _getPackedUserOp(address sender, uint256 privateKey) private view returns (PackedUserOperation memory) {
         uint256 nonce = 0;
         bytes32 accountGasLimits = bytes32(abi.encodePacked(uint256(0), uint256(0)));
         uint256 preVerificationGas = 0;
@@ -113,7 +134,7 @@ contract MinimalAccountTest is Test {
         });
 
         // Generate the signature
-        userOp.signature = this._getUserSignature(userOp, helperConfig.getConfig().entryPoint, privateKey);
+        userOp.signature = this._getUserSignature(userOp, config.entryPoint, privateKey);
 
         return userOp;
     }
