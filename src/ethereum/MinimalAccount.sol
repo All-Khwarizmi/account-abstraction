@@ -44,12 +44,12 @@ contract MinimalAccount is IAccount, Ownable {
     //////////////////////////////////////////////////////////////*/
 
     function _validateSignature(PackedUserOperation calldata userOp, bytes32 userOpHash)
-        internal
+        public
         view
         returns (uint256 validationData)
     {
-        bytes32 ethSignedMessageHash = MessageHashUtils.toEthSignedMessageHash(userOpHash);
-        address signer = ECDSA.recover(ethSignedMessageHash, userOp.signature);
+        // bytes32 ethSignedMessageHash = MessageHashUtils.toEthSignedMessageHash(userOpHash);
+        address signer = ECDSA.recover(userOpHash, userOp.signature);
 
         if (signer != owner()) {
             return SIG_VALIDATION_FAILED;
