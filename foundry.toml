@@ -8,7 +8,8 @@ remappings = [
     "ds-test/=lib/forge-std/lib/ds-test/src/",
     "forge-std/=lib/forge-std/src/",
     "@openzeppelin-contracts/=lib/openzeppelin-contracts/",
-    "@zk-era-contracts/=lib/foundry-era-contracts/src/"
+    "@zk-era-contracts/=lib/foundry-era-contracts/src/",
 ]
+--system-mode = true
 
 # See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options
