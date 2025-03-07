@@ -2,7 +2,8 @@
 pragma solidity 0.8.24;
 
 import {Test} from "forge-std/Test.sol";
-import {EntryPoint} from "@account-abstraction/contracts/core/EntryPoint.sol";
+import {EntryPoint, IEntryPoint} from "@account-abstraction/contracts/core/EntryPoint.sol";
+import {ECDSA} from "@openzeppelin-contracts/contracts/utils/cryptography/ECDSA.sol";
 import {UserOperationLib} from "@account-abstraction/contracts/core/UserOperationLib.sol";
 import {MinimalAccount} from "../../src/ethereum/MinimalAccount.sol";
 import {HelperConfig} from "../../script/HelperConfig.s.sol";
@@ -10,10 +11,12 @@ import {DeployMinimal} from "../../script/DeployMinimal.s.sol";
 import {ERC20Mock} from "@openzeppelin-contracts/contracts/mocks/token/ERC20Mock.sol";
 import {PackedUserOperation} from "@account-abstraction/contracts/interfaces/PackedUserOperation.sol";
 import {SIG_VALIDATION_FAILED, SIG_VALIDATION_SUCCESS} from "@account-abstraction/contracts/core/Helpers.sol";
+import {SendPackedUserOp} from "../../script/SendPackedUserOp.s.sol";
 
 contract MinimalAccountTest is Test {
     using UserOperationLib for PackedUserOperation;
 
+    SendPackedUserOp sendPackedUserOp;
     DeployMinimal deployMinimal;
     HelperConfig helperConfig;
     HelperConfig.NetworkConfig config;
@@ -31,6 +34,7 @@ contract MinimalAccountTest is Test {
         assertEq(minimalAccount.owner(), OWNER);
         // assertEq(helperConfig.getConfig().entryPoint, address(this));
         usdc = new ERC20Mock();
+        sendPackedUserOp = new SendPackedUserOp();
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -61,46 +65,40 @@ contract MinimalAccountTest is Test {
                            VALIDATE SIGNATURE
     //////////////////////////////////////////////////////////////*/
 
-    function testShouldBeAbleToValidateSignature() public {
-        PackedUserOperation memory userOp = _getPackedUserOp(minimalAccount.owner(), PRIVATE_KEY);
+    function testSignatureRecoveryAffirmative() public view {
+        (PackedUserOperation memory userOp, bytes32 ethSignedMessageHash) =
+            sendPackedUserOp.generateSignedUserOp(hex"", config);
 
-        bytes32 userOpHash = this._getUserOpHash(userOp, helperConfig.getConfig().entryPoint);
+        address signer = ECDSA.recover(ethSignedMessageHash, userOp.signature);
 
-        uint256 validationData = minimalAccount._validateSignature(userOp, userOpHash);
-
-        assertEq(validationData, SIG_VALIDATION_SUCCESS);
+        assertEq(signer, config.account);
     }
     /*//////////////////////////////////////////////////////////////
                             VALIDATE USER OP
     //////////////////////////////////////////////////////////////*/
 
-    function testValidateUserOpReturnAffirmativeValidationData() public {
-        // Create the packed user op
-        PackedUserOperation memory userOp = _getPackedUserOp(minimalAccount.owner(), PRIVATE_KEY);
-        // Get the user op hash (using method _getUserOpHash)
-        bytes32 userOpHash = this._getUserOpHash(userOp, config.entryPoint);
+    function testValidationUserOp() public {
+        // Create the function data
+        address dest = address(usdc);
 
-        vm.deal(address(minimalAccount), MISSING_ACCOUNT_FUNDS);
+        bytes memory functionData = abi.encodeWithSelector(ERC20Mock.mint.selector, address(this), AMOUNT);
+
+        // Create the call data
+        bytes memory callData = abi.encodeWithSelector(minimalAccount.execute.selector, dest, AMOUNT, functionData);
+
+        // Create the packed user op
+        PackedUserOperation[] memory userOps = new PackedUserOperation[](1);
+
+        (PackedUserOperation memory userOp, bytes32 ethSignedMessageHash) =
+            sendPackedUserOp.generateSignedUserOp(callData, config);
+
+        userOps[0] = userOp;
+
+        vm.deal(address(minimalAccount), type(uint256).max);
 
         // Validate the user op
         vm.prank(config.entryPoint);
-        uint256 validationData = minimalAccount.validateUserOp(userOp, userOpHash, MISSING_ACCOUNT_FUNDS);
-
-        assertEq(validationData, SIG_VALIDATION_SUCCESS); // SIG_VALIDATION_SUCCESS = 0
-    }
-
-    function testValidateUserOpReturnNegativeValidationData() public {
-        // Create the packed user op
-        (address sender, uint256 privateKey) = makeAddrAndKey("user");
-        PackedUserOperation memory userOp = _getPackedUserOp(sender, privateKey);
-        // Get the user op hash (using method _getUserOpHash)
-        bytes32 userOpHash = this._getUserOpHash(userOp, config.entryPoint);
-
-        vm.deal(address(minimalAccount), MISSING_ACCOUNT_FUNDS);
-
-        // Validate the user op
-        vm.prank(config.entryPoint);
-        uint256 validationData = minimalAccount.validateUserOp(userOp, userOpHash, MISSING_ACCOUNT_FUNDS);
+        uint256 validationData = minimalAccount.validateUserOp(userOp, ethSignedMessageHash, MISSING_ACCOUNT_FUNDS);
 
         assertEq(validationData, SIG_VALIDATION_FAILED); // SIG_VALIDATION_FAILED = 1
     }

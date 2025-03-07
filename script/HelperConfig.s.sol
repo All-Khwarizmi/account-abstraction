@@ -17,7 +17,7 @@ contract HelperConfig is Script {
     uint256 constant ZKSYNC_SEPOLIA_CHAIN_ID = 300;
     uint256 constant LOCAL_CHAIN_ID = 31337;
     NetworkConfig public localNetworkConfig;
-    address constant BURNER_WALLET = 0xf3B032F37F8f383588FeB350a5c5702b72EE2004;
+    address constant BURNER_WALLET = 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266;
 
     mapping(uint256 chainId => NetworkConfig) public networkConfigs;
 
