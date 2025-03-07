@@ -23,6 +23,7 @@ contract MinimalAccountTest is Test {
     MinimalAccount minimalAccount;
     ERC20Mock usdc;
     uint256 AMOUNT = 100;
+    address randomUser = makeAddr("randomUser");
     address OWNER = 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266;
     uint256 private PRIVATE_KEY = 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80;
     uint256 private constant MISSING_ACCOUNT_FUNDS = 100;
@@ -67,7 +68,7 @@ contract MinimalAccountTest is Test {
 
     function testSignatureRecoveryAffirmative() public view {
         (PackedUserOperation memory userOp, bytes32 ethSignedMessageHash) =
-            sendPackedUserOp.generateSignedUserOp(hex"", config);
+            sendPackedUserOp.generateSignedUserOp(address(minimalAccount), hex"", config);
 
         address signer = ECDSA.recover(ethSignedMessageHash, userOp.signature);
 
@@ -90,7 +91,7 @@ contract MinimalAccountTest is Test {
         PackedUserOperation[] memory userOps = new PackedUserOperation[](1);
 
         (PackedUserOperation memory userOp, bytes32 ethSignedMessageHash) =
-            sendPackedUserOp.generateSignedUserOp(callData, config);
+            sendPackedUserOp.generateSignedUserOp(address(minimalAccount), callData, config);
 
         userOps[0] = userOp;
 
@@ -104,9 +105,21 @@ contract MinimalAccountTest is Test {
     }
 
     function testValidateUserOpSendsMissingAccountFunds() public {
-        PackedUserOperation memory userOp = _getPackedUserOp(minimalAccount.owner(), PRIVATE_KEY);
+        // Create the function data
+        address dest = address(usdc);
 
-        bytes32 userOpHash = this._getUserOpHash(userOp, config.entryPoint);
+        bytes memory functionData = abi.encodeWithSelector(ERC20Mock.mint.selector, address(this), AMOUNT);
+
+        // Create the call data
+        bytes memory callData = abi.encodeWithSelector(minimalAccount.execute.selector, dest, AMOUNT, functionData);
+
+        // Create the packed user op
+        PackedUserOperation[] memory userOps = new PackedUserOperation[](1);
+
+        (PackedUserOperation memory userOp, bytes32 ethSignedMessageHash) =
+            sendPackedUserOp.generateSignedUserOp(address(minimalAccount), callData, config);
+
+        userOps[0] = userOp;
 
         uint256 entryPointBalanceBefore = address(config.entryPoint).balance;
         assertEq(entryPointBalanceBefore, 0);
@@ -114,11 +127,45 @@ contract MinimalAccountTest is Test {
         vm.deal(address(minimalAccount), MISSING_ACCOUNT_FUNDS);
 
         vm.prank(config.entryPoint);
-        minimalAccount.validateUserOp(userOp, userOpHash, MISSING_ACCOUNT_FUNDS);
+        minimalAccount.validateUserOp(userOp, ethSignedMessageHash, MISSING_ACCOUNT_FUNDS);
 
         uint256 entryPointBalanceAfter = address(config.entryPoint).balance;
 
         assertEq(entryPointBalanceAfter, entryPointBalanceBefore + MISSING_ACCOUNT_FUNDS);
+    }
+
+    function testEntryPointCanExecute() public {
+        // Create the function data
+        address dest = address(usdc);
+
+        bytes memory functionData = abi.encodeWithSelector(ERC20Mock.mint.selector, address(this), AMOUNT);
+
+        // Create the call data
+        bytes memory callData = abi.encodeWithSelector(minimalAccount.execute.selector, dest, 0, functionData);
+
+        // Create the packed user op
+        PackedUserOperation[] memory userOps = new PackedUserOperation[](1);
+
+        (PackedUserOperation memory userOp,) =
+            sendPackedUserOp.generateSignedUserOp(address(minimalAccount), callData, config);
+
+        userOps[0] = userOp;
+
+        vm.deal(address(minimalAccount), type(uint256).max);
+
+        // Call EntryPoint.handleOps
+        IEntryPoint entryPoint = IEntryPoint(config.entryPoint);
+
+        uint256 randomUserBalanceBefore = randomUser.balance;
+
+        vm.prank(randomUser);
+        entryPoint.handleOps(userOps, payable(randomUser));
+
+        uint256 randomUserBalanceAfter = randomUser.balance;
+
+        assert(randomUserBalanceAfter > randomUserBalanceBefore);
+        
+        assertEq(usdc.balanceOf(address(this)), AMOUNT);
     }
 
     /*//////////////////////////////////////////////////////////////
